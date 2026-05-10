@@ -63,6 +63,27 @@ RAG-Lab/
 
 ---
 
+## 数据集
+
+本项目使用 **CMU 10-701 机器学习课程**（2011 年春季学期）的公开讲义作为知识库。
+
+| 项目 | 信息 |
+|------|------|
+| 课程 | 10-701 Introduction to Machine Learning |
+| 教授 | Tom Mitchell |
+| 学期 | Spring 2011 |
+| 来源 | https://www.cs.cmu.edu/~tom/10701_sp11/lectures.shtml |
+| 文件数 | 43 篇 PDF 讲义 |
+| 许可 | 公开课程资料，仅用于学习研究 |
+
+**涵盖主题**：线性回归、逻辑回归、朴素贝叶斯、SVM、决策树、神经网络、深度学习、偏差-方差权衡、梯度下降、交叉验证、EM 算法、贝叶斯推断、图模型、PAC 学习、PCA/SVD、强化学习 等。
+
+首次运行 `python main.py build` 时会自动从 CMU 网站抓取并下载所有讲义 PDF，解析为纯文本后构建索引。离线环境下会自动使用内置的 10 篇示例文档。
+
+> 如果想接入你自己的文档，只需修改 `config.py` 中的 `cmu_lectures_url` 和 `cmu_lecture_base` 即可。
+
+---
+
 ## 快速开始
 
 ### 1. 环境准备
