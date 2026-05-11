@@ -8,12 +8,48 @@ from src.embedder import Embedder
 from src.vector_store import VectorStore
 
 
+def _has_chinese(text: str) -> bool:
+    return any('一' <= c <= '鿿' for c in text)
+
+
 def _tokenize(text: str) -> List[str]:
     """Tokenize text for BM25, using jieba for Chinese and whitespace for English."""
-    has_chinese = any('一' <= c <= '鿿' for c in text)
-    if has_chinese:
+    if _has_chinese(text):
         return list(jieba.cut(text))
     return text.lower().split()
+
+
+# 翻译缓存，避免重复请求
+_translation_cache: Dict[str, str] = {}
+
+
+def _translate_query(chinese_query: str) -> str:
+    """将中文查询翻译为英文，用于 BM25 跨语言检索。结果会被缓存。"""
+    if chinese_query in _translation_cache:
+        return _translation_cache[chinese_query]
+
+    from openai import OpenAI
+
+    client = OpenAI(
+        api_key=config.deepseek_api_key,
+        base_url=config.deepseek_base_url,
+    )
+    response = client.chat.completions.create(
+        model=config.deepseek_model,
+        messages=[{
+            "role": "user",
+            "content": (
+                "Translate the following Chinese question into English for academic "
+                "document search. Return ONLY the English translation, no explanation.\n\n"
+                f"Chinese: {chinese_query}\nEnglish:"
+            ),
+        }],
+        temperature=0.0,
+        max_tokens=128,
+    )
+    translated = response.choices[0].message.content.strip()
+    _translation_cache[chinese_query] = translated
+    return translated
 
 
 class HybridRetriever:
@@ -41,6 +77,7 @@ class HybridRetriever:
         self.vector_weight = vector_weight if vector_weight is not None else config.retrieval_weights["vector"]
         self._bm25_index: Optional[BM25Okapi] = None
         self._bm25_chunks: List[Dict] = []
+        self._translated_query: Optional[str] = None  # 最近一次 BM25 翻译结果
 
     def build_bm25(self, chunks: List[Dict]):
         """Build BM25 index from chunks."""
@@ -58,7 +95,16 @@ class HybridRetriever:
         if self._bm25_index is None:
             return []
 
-        tokens = _tokenize(query)
+        search_query = query
+        self._translated_query = None
+        if config.enable_query_translation and _has_chinese(query):
+            try:
+                search_query = _translate_query(query)
+                self._translated_query = search_query
+            except Exception:
+                pass  # 翻译失败就降级用原文
+
+        tokens = _tokenize(search_query)
         scores = self._bm25_index.get_scores(tokens)
         top_indices = np.argsort(scores)[::-1][:self.top_k * 2]
 

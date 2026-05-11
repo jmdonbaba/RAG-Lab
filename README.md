@@ -212,14 +212,40 @@ python main.py ui
 | `hybrid_fusion` | `"rrf"` | 融合算法：`rrf`（排名融合）/ `weighted`（加权求和） |
 | `llm_provider` | `"deepseek"` | LLM 提供商：`deepseek` / `openai` / `local` |
 | `temperature` | 0.1 | 生成温度（越低越保守，适合知识问答） |
+| `enable_query_translation` | `True` | BM25 中→英查询翻译（跨语言检索） |
+
+---
+
+## 功能亮点
+
+### 🌐 BM25 查询翻译
+
+文档为英文讲义，但用户可能用中文提问。系统自动检测中文查询，通过 LLM 翻译为英文后再执行 BM25 关键词检索，解决跨语言词汇不匹配的问题。
+
+```
+"什么是机器学习？" → 🌐 翻译 → "What is machine learning?" → BM25 检索 → 5 条结果
+```
+
+翻译结果会缓存，相同查询不重复调用 API，翻译失败自动降级为原文检索。
+
+### 📊 检索策略对比
+
+在同一界面中对比 **BM25 关键词检索**、**向量语义检索** 和 **混合检索（RRF 融合）** 三种策略的结果，直观感受不同方法的差异。
+
+---
+
+## 演示视频
+
+[📺 观看项目演示视频](RAG-Lab项目演示视频.mp4)
 
 ---
 
 ## 扩展方向
 
+- [x] ~~Query 翻译（跨语言 BM25 检索）~~
 - [ ] Re-Ranker 重排序（如 BGE-Reranker）
 - [ ] 多轮对话记忆
-- [ ] Query 改写 / HyDE 查询增强
+- [ ] HyDE 查询增强
 - [ ] LangChain / LlamaIndex 集成对比
 - [ ] 流式输出（Streaming）
 - [ ] 更多文档格式支持（Markdown、Word）

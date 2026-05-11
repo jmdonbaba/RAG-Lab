@@ -26,13 +26,7 @@ class VectorStore:
             settings=Settings(anonymized_telemetry=False),
         )
 
-        # Delete if exists to allow fresh indexing
-        try:
-            client.delete_collection(self.collection_name)
-        except Exception:
-            pass
-
-        self._store = client.create_collection(
+        self._store = client.get_or_create_collection(
             name=self.collection_name,
             metadata={"hnsw:space": "cosine"},
         )
@@ -52,6 +46,10 @@ class VectorStore:
         if self.store_type == "chroma":
             if self._store is None:
                 self._init_chroma()
+            # 清除旧数据后再写入，防止重复 / 脏数据
+            existing = self._store.get()
+            if existing and existing["ids"]:
+                self._store.delete(ids=existing["ids"])
             self._store.add(
                 embeddings=embeddings.tolist(),
                 documents=texts,

@@ -79,7 +79,7 @@ class Generator:
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            return f"[{self.provider.upper()} API error: {e}]\n\nFalling back to context-only response."
+            raise RuntimeError(f"{self.provider.upper()} API call failed: {e}") from e
 
     def _call_local(self, prompt: str, temperature: float) -> str:
         """Attempt local model, fall back to template-based response."""

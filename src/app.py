@@ -3,9 +3,20 @@ import gradio as gr
 from config import config
 from src.pipeline import RAGPipeline
 
+_pipeline_cache = None
+
 
 def get_pipeline():
-    """Lazy-init the RAG pipeline (not stored in global for serverless safety)."""
+    """返回已构建好的 pipeline 单例，避免每次请求重建索引。"""
+    global _pipeline_cache
+    if _pipeline_cache is None:
+        _pipeline_cache = RAGPipeline()
+        _pipeline_cache.build_index()
+    return _pipeline_cache
+
+
+def get_fresh_pipeline():
+    """创建全新的 pipeline（用于评估等会修改 pipeline 状态的操作）。"""
     pipeline = RAGPipeline()
     pipeline.build_index()
     return pipeline
@@ -139,7 +150,10 @@ METHOD_META = {
 
 def compare_strategies(query: str):
     if not query.strip():
-        return "", "", ""
+        yield "", "", "", ""
+        return
+
+    yield "⏳ 正在检索中...", "", "", ""
 
     try:
         pipeline = get_pipeline()
@@ -150,6 +164,11 @@ def compare_strategies(query: str):
             meta = METHOD_META[method]
             html = f'<div class="method-card">'
             html += f'<h3 style="color:{meta["color"]}">{meta["icon"]} {meta["name"]}</h3>'
+            if method == "bm25" and results.get("translated_query"):
+                html += (
+                    f'<p style="font-size:12px;color:var(--color-primary-600);margin:4px 0;">'
+                    f'🌐 已翻译为: <strong>{results["translated_query"]}</strong></p>'
+                )
             html += f'<p style="color:var(--color-neutral-500);font-size:13px;">共 {len(docs)} 条结果</p>'
             for i, d in enumerate(docs, 1):
                 score = f"{d['score']:.4f}" if isinstance(d["score"], float) else str(d["score"])
@@ -163,10 +182,10 @@ def compare_strategies(query: str):
             html += "</div>"
             return html
 
-        return build_col("bm25"), build_col("vector"), build_col("hybrid")
+        yield "", build_col("bm25"), build_col("vector"), build_col("hybrid")
     except Exception as e:
         err = f'<div class="error-box">❌ 检索对比失败: {e}</div>'
-        return err, err, err
+        yield "", err, err, err
 
 
 # ── Evaluate ───────────────────────────────────────────────────────
@@ -174,7 +193,7 @@ def compare_strategies(query: str):
 
 def evaluate_system(progress=gr.Progress()):
     progress(0.05, desc="正在初始化流水线...")
-    pipeline = get_pipeline()
+    pipeline = get_fresh_pipeline()
 
     progress(0.15, desc="正在运行评估（可能需要 1-2 分钟）...")
     from src.evaluator import Evaluator
@@ -196,30 +215,30 @@ def evaluate_system(progress=gr.Progress()):
 
     progress(0.5, desc="处理分块策略对比...")
 
-    # Chunking comparison table
+    # Chunking comparison table — 用 list-of-lists 格式，确保值都是 Python 原生类型
     chunking_data = []
     if "chunking_comparison" in results:
         for strat, d in results["chunking_comparison"].items():
-            chunking_data.append({
-                "策略": strat,
-                "分块数": d.get("num_chunks", "N/A"),
-                "平均长度": f'{d.get("avg_chunk_length", 0):.0f}',
-                "延迟 (ms)": d.get("avg_latency_ms", "N/A"),
-                "重叠度": d.get("avg_bm25_vector_overlap", "N/A"),
-            })
+            chunking_data.append([
+                strat,
+                int(d.get("num_chunks", 0)),
+                f'{float(d.get("avg_chunk_length", 0)):.0f}',
+                f'{float(d.get("avg_latency_ms", 0)):.0f} ms',
+                f'{float(d.get("avg_bm25_vector_overlap", 0)):.4f}',
+            ])
 
     progress(0.7, desc="处理嵌入模型对比...")
 
-    # Embedding comparison table
+    # Embedding comparison table — 同上
     embedding_data = []
     if "embedding_comparison" in results:
         for model, d in results["embedding_comparison"].items():
-            embedding_data.append({
-                "模型": model,
-                "维度": d.get("dim", "N/A"),
-                "平均相似度": f'{d.get("avg_similarity", 0):.4f}',
-                "覆盖率": d.get("coverage", "N/A"),
-            })
+            embedding_data.append([
+                model,
+                int(d.get("dim", 0)),
+                f'{float(d.get("avg_similarity", 0)):.4f}',
+                f'{float(d.get("coverage", 0)):.2%}',
+            ])
 
     progress(0.95, desc="完成!")
 
@@ -326,7 +345,7 @@ def build_ui():
                                 scale=3,
                             )
                             compare_btn = gr.Button("开始对比", variant="primary", scale=1)
-                        gr.Markdown("", elem_id="compare-loading")
+                        compare_status = gr.Markdown("", elem_id="compare-loading")
 
                         with gr.Row(equal_height=True):
                             bm25_col = gr.HTML(label="BM25 关键词检索")
@@ -336,7 +355,7 @@ def build_ui():
                         compare_btn.click(
                             fn=compare_strategies,
                             inputs=[compare_query],
-                            outputs=[bm25_col, vec_col, hyb_col],
+                            outputs=[compare_status, bm25_col, vec_col, hyb_col],
                         )
 
                     # ── Tab 3: Evaluate ───────────────────────
@@ -370,14 +389,28 @@ def build_ui():
                             )
 
                         def on_eval_click(progress=gr.Progress()):
-                            summary, chunking, embedding = evaluate_system(progress)
-                            return (
-                                gr.update(visible=True),
-                                summary if summary else None,
-                                chunking if chunking else None,
-                                embedding if embedding else None,
-                                "✅ 评估完成！",
+                            # First yield: immediate feedback so the button doesn't look dead
+                            yield (
+                                gr.update(visible=False),
+                                None, None, None,
+                                "⏳ 正在初始化评估流水线...\n\n> 首次运行需要 1-2 分钟，请耐心等待。",
                             )
+                            try:
+                                summary, chunking, embedding = evaluate_system(progress)
+                                yield (
+                                    gr.update(visible=True),
+                                    summary if summary else None,
+                                    chunking,
+                                    embedding,
+                                    "✅ 评估完成！",
+                                )
+                            except Exception as exc:
+                                import traceback
+                                yield (
+                                    gr.update(visible=False),
+                                    None, None, None,
+                                    f"❌ 评估失败:\n```\n{traceback.format_exc()}\n```",
+                                )
 
                         eval_btn.click(
                             fn=on_eval_click,

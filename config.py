@@ -97,6 +97,7 @@ class Config:
     top_k: int = 5
     retrieval_weights: dict = field(default_factory=lambda: {"bm25": 0.2, "vector": 0.8})
     hybrid_fusion: str = "rrf"
+    enable_query_translation: bool = True  # BM25 中→英翻译，解决跨语言检索
 
     # ============================================================
     # 答案生成 (Generation)

@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-specific
+data/
+.claude/
+.idea/
+generate_report.py
+*实验报告*
+~$*

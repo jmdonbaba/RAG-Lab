@@ -132,6 +132,7 @@ class RAGPipeline:
             "bm25": self._format_retrieval(bm25),
             "vector": self._format_retrieval(vector),
             "hybrid": self._format_retrieval(hybrid),
+            "translated_query": getattr(self.retriever, "_translated_query", None),
         }
 
     @staticmethod
