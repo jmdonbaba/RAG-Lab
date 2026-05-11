@@ -236,7 +236,7 @@ python main.py ui
 
 ## 演示视频
 
-[📺 观看项目演示视频](RAG-Lab项目演示视频.mp4)
+[📺 观看项目演示视频](rag-lab-demo.mp4)
 
 ---
 
