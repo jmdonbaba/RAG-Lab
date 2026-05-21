@@ -54,6 +54,13 @@ RAG-Lab/
 │   ├── evaluator.py              # 检索与生成质量评估
 │   └── app.py                    # Gradio 网页界面
 │
+├── tests/                        # pytest 自动化测试
+│   ├── conftest.py               # 共享 fixtures（测试数据、embedder、存储）
+│   ├── test_chunker.py           # 分块策略测试（17 个用例）
+│   ├── test_embedder.py          # 向量嵌入测试（6 个用例）
+│   ├── test_retriever.py         # 混合检索测试（22 个用例）
+│   └── test_vector_store.py      # 向量存储测试（9 个用例）
+│
 └── data/                         # 数据目录（自动创建，已 gitignore）
     ├── raw/                      # 原始下载文件
     ├── processed/                # 解析后的文本
@@ -149,6 +156,40 @@ python main.py ui
 | `--embedding` | `build` | 嵌入模型名称 |
 | `--top_k` | `query` | 返回的文档片段数量（默认 5） |
 | `--no_llm` | `query` | 仅检索模式，不调用 LLM 生成 |
+
+---
+
+## 测试
+
+项目包含完整的 pytest 测试套件，覆盖核心模块：文本分块、向量嵌入、混合检索和向量存储。
+
+```bash
+# 运行全部测试
+pytest tests/ -v
+
+# 仅运行快速单元测试（无需加载嵌入模型）
+pytest tests/ -v -k "not Integration"
+
+# 查看覆盖率
+pytest tests/ --cov=src --cov-report=term-missing
+```
+
+| 模块 | 测试内容 |
+|------|---------|
+| `test_chunker.py` | 三种分块策略的正确性、元数据完整性、策略对比统计 |
+| `test_embedder.py` | 向量维度、L2 归一化、一致性、不同文本区分度 |
+| `test_retriever.py` | 中英文检测与分词、RRF 融合数学、加权融合、BM25/向量/混合检索集成 |
+| `test_vector_store.py` | ChromaDB 增删查、计数、清除重建、异常处理 |
+
+### 实验图表
+
+```bash
+# 运行评估并生成实验报告的 PDF 图表
+python scripts/generate_figures.py
+# 输出：figures/*.pdf（分块策略对比、检索性能、嵌入模型对比等）
+```
+
+图表用于编译 `RAG实验报告.tex`，需安装 matplotlib。
 
 ---
 

@@ -32,3 +32,10 @@ markdown>=3.5.0
 # --- 教程 Notebook ---
 jupyter>=1.0.0
 ipykernel>=6.0.0
+
+# --- 测试 ---
+pytest>=8.0.0
+pytest-cov>=5.0.0
+
+# --- 图表生成 ---
+matplotlib>=3.8.0
