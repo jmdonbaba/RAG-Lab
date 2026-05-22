@@ -15,6 +15,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# HuggingFace 镜像 — 国内网络环境下自动切换，解决 HuggingFace Hub 被墙问题
+# 参考: https://hf-mirror.com
+if not os.environ.get("HF_ENDPOINT"):
+    os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 
 @dataclass
 class Config:

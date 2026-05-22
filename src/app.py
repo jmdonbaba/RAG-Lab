@@ -27,7 +27,7 @@ custom_theme = gr.themes.Soft(
     primary_hue="blue",
     secondary_hue="slate",
     neutral_hue="slate",
-    font=gr.themes.GoogleFont("Inter"),
+    font=gr.themes.Font("Inter", "system-ui", "sans-serif"),
 ).set(
     body_background_fill="*neutral_50",
     block_background_fill="white",
@@ -98,6 +98,25 @@ footer { display: none !important; }
     border-radius: 8px;
     padding: 12px 16px;
     color: #991b1b;
+}
+/* 示例问题按钮 — 默认状态增加区分度 */
+.chat-interface .example-container button,
+.examples button,
+button.example {
+    background: var(--color-primary-50) !important;
+    border: 1px solid var(--color-primary-200) !important;
+    color: var(--color-primary-700) !important;
+    border-radius: 99px !important;
+    padding: 6px 16px !important;
+    font-size: 13px !important;
+    transition: all 0.2s ease !important;
+}
+.chat-interface .example-container button:hover,
+.examples button:hover,
+button.example:hover {
+    background: var(--color-primary-100) !important;
+    border-color: var(--color-primary-400) !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
 }
 """
 
