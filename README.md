@@ -281,7 +281,7 @@ python scripts/generate_figures.py
 
 ## 演示视频
 
-[📺 观看项目演示视频](rag-lab-demo.mp4)
+[📺 观看项目演示视频](rag-lab-demo.mp4)（受版本迭代影响，视频演示和实际效果可能有细节差异）
 
 ---
 
