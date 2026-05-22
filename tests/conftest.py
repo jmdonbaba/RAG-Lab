@@ -140,6 +140,6 @@ def chroma_tmp_path(tmp_path):
 
 @pytest.fixture
 def sample_embeddings(embedder):
-    """32-dim random embeddings matching a hypothetical model dimension."""
+    """L2-normalized embeddings from the real embedder (all-MiniLM-L6-v2, 384-dim)."""
     texts = [d["content"] for d in SAMPLE_ML_DOCS]
     return embedder.embed(texts, show_progress=False)

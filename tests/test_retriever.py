@@ -145,12 +145,10 @@ class TestHybridRetrieverIntegration:
         assert len(results) >= 1
         assert any("logistic" in r["content"].lower() for r in results)
 
-    def test_bm25_misses_synonyms(self):
-        """BM25 should NOT match on synonyms alone — that's the vector's job."""
+    def test_bm25_matches_on_keywords(self):
+        """BM25 matches on token overlap, not semantic meaning — that's the vector's job."""
         results = self.retriever.retrieve_bm25_only("classification model optimization")
-        # The docs don't contain this exact phrase as-is; BM25 may still get
-        # partial matches from "model" or "optimization", but the key point is
-        # that at least one result is returned for the partial keyword hits
+        # BM25 should return results via partial keyword matches (e.g. "model")
         assert len(results) > 0
 
     def test_vector_retrieval_finds_semantic_matches(self, embedder):

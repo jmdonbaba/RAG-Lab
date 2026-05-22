@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from config import config
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -44,7 +45,6 @@ STRATEGY_LABELS = {
 def main():
     os.makedirs(FIG_DIR, exist_ok=True)
 
-    from config import config
     from src.pipeline import RAGPipeline
     from src.evaluator import Evaluator
 
@@ -89,6 +89,7 @@ def fig_chunking(results):
         bars = ax.bar(strategies, values, color=COLORS[:3], width=0.5, edgecolor="white")
         ax.set_title(title)
         ax.set_ylabel(ylabel)
+        ax.set_xticks(range(len(strategies)))
         ax.set_xticklabels(
             [STRATEGY_LABELS.get(s, s) for s in strategies], rotation=15, ha="right"
         )
@@ -115,23 +116,30 @@ def fig_retrieval(results):
         return
 
     overlaps = [q["bm25_vector_jaccard"] for q in per_query]
+    bm25_counts = [q["num_bm25"] for q in per_query]
+    vector_counts = [q["num_vector"] for q in per_query]
     latencies = [q["latency_ms"] for q in per_query]
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
     x = range(len(per_query))
     labels = [f"Q{i + 1}" for i in x]
 
-    axes[0].bar(x, overlaps, color=COLORS[1], width=0.5, edgecolor="white")
-    axes[0].set_title("BM25-Vector Overlap (Jaccard)")
+    bars_o = axes[0].bar(x, overlaps, color=COLORS[1], width=0.5, edgecolor="white")
+    axes[0].set_title("BM25-Vector Overlap (Jaccard)\nzero = complementary or BM25 keyword miss")
     axes[0].set_ylabel("Jaccard Coefficient")
     axes[0].set_xticks(x)
     axes[0].set_xticklabels(labels)
     axes[0].axhline(y=np.mean(overlaps), color=COLORS[3], linestyle="--",
                     label=f"Avg: {np.mean(overlaps):.3f}")
     axes[0].legend(fontsize=9)
+    # Annotate each bar with BM25 / Vector result counts
+    for bar, b_cnt, v_cnt in zip(bars_o, bm25_counts, vector_counts):
+        h = bar.get_height()
+        axes[0].text(bar.get_x() + bar.get_width() / 2, max(h, max(overlaps) * 0.03),
+                     f"B:{b_cnt} V:{v_cnt}", ha="center", fontsize=7, color="#555")
 
     axes[1].bar(x, latencies, color=COLORS[2], width=0.5, edgecolor="white")
-    axes[1].set_title("Retrieval Latency per Query")
+    axes[1].set_title("Total Retrieval Latency (BM25+Vector+Hybrid) per Query")
     axes[1].set_ylabel("Latency (ms)")
     axes[1].set_xticks(x)
     axes[1].set_xticklabels(labels)
@@ -160,26 +168,32 @@ def fig_embedding(results):
     short = [m.split("/")[-1][:25] for m in models]
 
     similarities = [data[m]["avg_similarity"] for m in models]
-    coverages = [data[m]["coverage"] for m in models]
+    discrims = [data[m]["discrimination"] for m in models]
     dims = [data[m]["dim"] for m in models]
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4.2))
 
     axes[0].bar(short, similarities, color=COLORS[: len(models)], width=0.5, edgecolor="white")
-    axes[0].set_title("Average Cosine Similarity")
-    axes[0].set_ylabel("Similarity")
+    axes[0].set_title("Avg Cosine Similarity\n(model-specific, not cross-comparable)")
+    axes[0].set_ylabel("Cosine Similarity")
+    axes[0].set_xticks(range(len(short)))
     axes[0].set_xticklabels(short, rotation=15, ha="right")
     axes[0].set_ylim(0, max(similarities) * 1.3)
 
-    axes[1].bar(short, coverages, color=COLORS[: len(models)], width=0.5, edgecolor="white")
-    axes[1].set_title("Coverage (similarity > 0.3)")
-    axes[1].set_ylabel("Fraction")
+    bars_d = axes[1].bar(short, discrims, color=COLORS[: len(models)], width=0.5, edgecolor="white")
+    axes[1].set_title("Discrimination Ratio\n(top / avg, higher = better separation)")
+    axes[1].set_ylabel("Ratio")
+    axes[1].set_xticks(range(len(short)))
     axes[1].set_xticklabels(short, rotation=15, ha="right")
-    axes[1].set_ylim(0, 1.1)
+    axes[1].axhline(y=1.0, color=COLORS[3], linestyle="--", linewidth=0.8)
+    for bar, val in zip(bars_d, discrims):
+        axes[1].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
+                     f"{val:.2f}", ha="center", fontsize=9)
 
     axes[2].bar(short, dims, color=COLORS[: len(models)], width=0.5, edgecolor="white")
     axes[2].set_title("Embedding Dimension")
     axes[2].set_ylabel("Dimensions")
+    axes[2].set_xticks(range(len(short)))
     axes[2].set_xticklabels(short, rotation=15, ha="right")
     for i, d in enumerate(dims):
         axes[2].text(i, d + 10, str(d), ha="center", fontsize=10)
@@ -203,13 +217,7 @@ def fig_coverage(results, pipeline):
         return
 
     top_scores = [q["hybrid_top_score"] for q in per_query]
-
-    # Collect average top-5 score per query from actual retrieval results
-    avg_scores = []
-    for q_info in per_query:
-        retrieved = pipeline.retriever.retrieve(q_info["query"])
-        s = [r.get("score", 0) for r in retrieved[:5]]
-        avg_scores.append(np.mean(s) if s else 0)
+    avg_scores = [q.get("hybrid_avg_top5_score", 0) for q in per_query]
 
     x = range(len(per_query))
     labels = [f"Q{i + 1}" for i in x]
@@ -217,14 +225,14 @@ def fig_coverage(results, pipeline):
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.2))
 
     axes[0].bar(x, top_scores, color=COLORS[0], width=0.5, edgecolor="white")
-    axes[0].set_title("Hybrid Top-1 Score per Query")
-    axes[0].set_ylabel("RRF Score")
+    axes[0].set_title("Hybrid Top-1 Fusion Score per Query")
+    axes[0].set_ylabel("Fusion Score")
     axes[0].set_xticks(x)
     axes[0].set_xticklabels(labels)
 
     axes[1].bar(x, avg_scores, color=COLORS[4], width=0.5, edgecolor="white")
-    axes[1].set_title("Hybrid Avg Score (Top-5)")
-    axes[1].set_ylabel("Avg RRF Score")
+    axes[1].set_title("Hybrid Avg Fusion Score (Top-5)")
+    axes[1].set_ylabel("Avg Fusion Score")
     axes[1].set_xticks(x)
     axes[1].set_xticklabels(labels)
     axes[1].axhline(y=np.mean(avg_scores), color=COLORS[2], linestyle="--",
@@ -244,12 +252,18 @@ def fig_coverage(results, pipeline):
 
 
 def fig_retrieval_methods(pipeline):
-    queries = [
-        "What is logistic regression?",
-        "Explain gradient descent",
-        "What is Bayesian inference?",
-        "How do decision trees work?",
-        "Explain the EM algorithm",
+    queries = config.eval_queries
+    short_labels = [
+        "logistic\nregression",
+        "support\nvector machines",
+        "bias-variance\ntradeoff",
+        "gradient\ndescent",
+        "cross-\nvalidation",
+        "EM\nalgorithm",
+        "Bayesian\ninference",
+        "decision\ntrees",
+        "supervised\nvs unsupervised",
+        "principal\ncomponent analysis",
     ]
 
     pairs = [("bm25", "vector"), ("bm25", "hybrid"), ("vector", "hybrid")]
@@ -269,7 +283,7 @@ def fig_retrieval_methods(pipeline):
 
     x = np.arange(len(queries))
     width = 0.25
-    fig, ax = plt.subplots(figsize=(12, 4.5))
+    fig, ax = plt.subplots(figsize=(15, 5))
     for i, (a, b) in enumerate(pairs):
         key = f"{a}-{b}"
         ax.bar(x + i * width, overlaps[key], width, label=pair_labels[key],
@@ -278,7 +292,7 @@ def fig_retrieval_methods(pipeline):
     ax.set_title("Retrieval Method Overlap (Jaccard)", fontweight="bold")
     ax.set_ylabel("Jaccard Coefficient")
     ax.set_xticks(x + width)
-    ax.set_xticklabels([q[:35] + "..." for q in queries], rotation=20, ha="right")
+    ax.set_xticklabels(short_labels, rotation=0, ha="center", fontsize=8)
     ax.legend()
     ax.set_ylim(0, 1.0)
 

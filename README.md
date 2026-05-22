@@ -54,12 +54,14 @@ RAG-Lab/
 │   ├── evaluator.py              # 检索与生成质量评估
 │   └── app.py                    # Gradio 网页界面
 │
-├── tests/                        # pytest 自动化测试
+├── tests/                        # pytest 自动化测试 (81 个用例, 77 通过)
 │   ├── conftest.py               # 共享 fixtures（测试数据、embedder、存储）
 │   ├── test_chunker.py           # 分块策略测试（17 个用例）
 │   ├── test_embedder.py          # 向量嵌入测试（6 个用例）
 │   ├── test_retriever.py         # 混合检索测试（22 个用例）
-│   └── test_vector_store.py      # 向量存储测试（9 个用例）
+│   ├── test_vector_store.py      # 向量存储测试（9 个用例）
+│   ├── test_evaluator.py         # 评估模块测试（13 个用例）
+│   └── test_generator.py         # LLM 生成模块测试（14 个用例）
 │
 └── data/                         # 数据目录（自动创建，已 gitignore）
     ├── raw/                      # 原始下载文件
@@ -161,7 +163,7 @@ python main.py ui
 
 ## 测试
 
-项目包含完整的 pytest 测试套件，覆盖核心模块：文本分块、向量嵌入、混合检索和向量存储。
+项目包含完整的 pytest 测试套件（81 个用例，77 通过，4 跳过），覆盖六大核心模块：文本分块、向量嵌入、混合检索、向量存储、系统评估和 LLM 生成。
 
 ```bash
 # 运行全部测试
@@ -180,6 +182,8 @@ pytest tests/ --cov=src --cov-report=term-missing
 | `test_embedder.py` | 向量维度、L2 归一化、一致性、不同文本区分度 |
 | `test_retriever.py` | 中英文检测与分词、RRF 融合数学、加权融合、BM25/向量/混合检索集成 |
 | `test_vector_store.py` | ChromaDB 增删查、计数、清除重建、异常处理 |
+| `test_evaluator.py` | 检索评估字段验证、RRF 得分选择、分块策略状态恢复、生成质量评估、完整评估流程 |
+| `test_generator.py` | LLM 提供商选择、上下文格式化、降级回复、prompt 模板、API 调用与异常处理 |
 
 ### 实验图表
 
@@ -189,7 +193,7 @@ python scripts/generate_figures.py
 # 输出：figures/*.pdf（分块策略对比、检索性能、嵌入模型对比等）
 ```
 
-图表用于编译 `RAG实验报告.tex`，需安装 matplotlib。
+图表包括分块策略对比、检索性能（含三种检索方式总延迟）、嵌入模型对比（含区分度比率，避免跨模型绝对相似度不可比问题）、混合检索融合得分、检索方式重叠度等。图表用于编译 `RAG实验报告.tex`，需安装 matplotlib。
 
 ---
 
@@ -219,9 +223,9 @@ python scripts/generate_figures.py
 ### 第4课：系统评估与策略对比
 [`notebooks/04_evaluation.ipynb`](notebooks/04_evaluation.ipynb)
 
-- 检索质量评估（延迟、召回、重叠度）→ 分块策略对比 → 嵌入模型对比 → 端到端评估报告
+- 检索质量评估（延迟、BM25-向量一致性、融合得分分布）→ 分块策略对比（含状态恢复）→ 嵌入模型对比 → LLM 生成质量评估 → 端到端评估报告
 
-**核心概念**：没有评估就没有改进方向。本课量化对比不同配置下的 RAG 系统表现。
+**核心概念**：没有评估就没有改进方向。本课量化对比不同配置下的 RAG 系统表现，并展示自动化测试套件与实验图表生成。
 
 ---
 

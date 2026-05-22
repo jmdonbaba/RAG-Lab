@@ -65,12 +65,16 @@ def compare_embedding_models(texts: List[str], query: str,
         scores = np.dot(doc_embs, query_emb)
         top_indices = np.argsort(scores)[::-1][:5]
 
+        mean_score = float(np.mean(scores))
+        top_score = float(scores[top_indices[0]])
+
         results[mn] = {
             "dim": emb.dim,
             "top_scores": scores[top_indices].tolist(),
             "top_texts_preview": [texts[i][:100] for i in top_indices],
-            "avg_similarity": float(np.mean(scores)),
-            "coverage": float(np.mean(scores > 0.3)),
+            "avg_similarity": mean_score,
+            "top_score": top_score,
+            "discrimination": round(top_score / (mean_score + 1e-8), 2),
         }
 
     return results

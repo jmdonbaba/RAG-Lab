@@ -37,6 +37,9 @@ class TestEmbedder:
     def test_different_texts_produce_different_embeddings(self, embedder):
         v1 = embedder.embed_query("linear regression minimizes MSE")
         v2 = embedder.embed_query("convolutional neural networks for images")
-        cosine_sim = np.dot(v1, v2)  # both normalized, dot = cosine
-        # Unrelated topics should have similarity clearly below 1.0
-        assert cosine_sim < 0.95
+        unrelated_sim = np.dot(v1, v2)
+
+        # Related texts should have higher similarity than unrelated ones
+        v3 = embedder.embed_query("linear models for prediction with least squares")
+        related_sim = np.dot(v1, v3)
+        assert related_sim > unrelated_sim

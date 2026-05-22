@@ -14,18 +14,14 @@ class Evaluator:
         self.pipeline = pipeline
         self.results: Dict = {}
 
-    def evaluate_retrieval(self, queries: Optional[List[str]] = None,
-                           metrics: Optional[List[str]] = None) -> Dict:
-        """Evaluate retrieval quality: MRR, Recall@K, NDCG@K."""
+    def evaluate_retrieval(self, queries: Optional[List[str]] = None) -> Dict:
+        """Evaluate retrieval quality through self-consistency, score distribution,
+        and latency. Without ground-truth relevance labels, MRR/Recall/NDCG are
+        not computable — BM25-vector overlap serves as a consistency proxy instead.
+        """
         if queries is None:
             queries = config.eval_queries
-        if metrics is None:
-            metrics = ["recall@3", "recall@5", "mrr", "ndcg@5"]
 
-        # For retrieval evaluation without ground truth, measure:
-        # - self-consistency (BM25 vs vector overlap)
-        # - score distribution
-        # - retrieval latency
         all_results = []
         latencies = []
         bm25_vector_overlap = []
@@ -43,15 +39,15 @@ class Evaluator:
             bm25_ids = set(r["id"] for r in bm25)
             vector_ids = set(r["id"] for r in vector)
 
-            # Overlap between methods
             bm25_vector_overlap.append(
                 len(bm25_ids & vector_ids) / max(len(bm25_ids | vector_ids), 1)
             )
 
-            # Score statistics
-            scores = [r.get("score", 0) for r in hybrid]
-            if scores:
-                score_variance.append(float(np.var(scores)))
+            # Per-result scores: prefer rrf_score in RRF mode, fall back to score
+            rrf_scores = [r.get("rrf_score", r.get("score", 0)) for r in hybrid]
+            raw_scores = [r.get("score", 0) for r in hybrid]
+            if rrf_scores:
+                score_variance.append(float(np.var(rrf_scores)))
 
             all_results.append({
                 "query": q,
@@ -59,7 +55,8 @@ class Evaluator:
                 "num_bm25": len(bm25),
                 "num_vector": len(vector),
                 "bm25_vector_jaccard": bm25_vector_overlap[-1],
-                "hybrid_top_score": scores[0] if scores else 0,
+                "hybrid_top_score": rrf_scores[0] if rrf_scores else 0,
+                "hybrid_avg_top5_score": float(np.mean(rrf_scores[:5])) if rrf_scores else 0,
                 "latency_ms": round(latency),
             })
 
@@ -73,26 +70,45 @@ class Evaluator:
         return self.results["retrieval"]
 
     def evaluate_chunking_strategies(self, queries: Optional[List[str]] = None) -> Dict:
-        """Compare retrieval under different chunking strategies."""
+        """Compare retrieval under different chunking strategies.
+
+        Saves and restores the original pipeline state so the caller's index
+        is not destroyed by the comparison.
+        """
         if queries is None:
-            queries = config.eval_queries[:5]
+            queries = config.eval_queries
+
+        # Save original state
+        _orig_chunker = self.pipeline.chunker
+        _orig_store = self.pipeline.vector_store
+        _orig_retriever = self.pipeline.retriever
+        _orig_chunks = list(self.pipeline.chunks)
+        _orig_strategy = self.pipeline.strategy
 
         comparison = {}
         docs = self.pipeline.loader.load_processed()
         if not docs:
             docs = self.pipeline.loader.run()
 
-        for strategy in ["fixed_token", "recursive_char", "semantic"]:
-            print(f"\n  Evaluating strategy: {strategy}")
-            self.pipeline.rebuild_with_strategy(strategy, docs)
-            eval_result = self.evaluate_retrieval(queries)
-            comparison[strategy] = {
-                "num_chunks": len(self.pipeline.chunks),
-                "avg_chunk_length": np.mean([c["length"] for c in self.pipeline.chunks])
-                if self.pipeline.chunks else 0,
-                "avg_latency_ms": eval_result["avg_latency_ms"],
-                "avg_bm25_vector_overlap": eval_result["avg_bm25_vector_overlap"],
-            }
+        try:
+            for strategy in ["fixed_token", "recursive_char", "semantic"]:
+                print(f"\n  Evaluating strategy: {strategy}")
+                self.pipeline.rebuild_with_strategy(strategy, docs)
+                eval_result = self.evaluate_retrieval(queries)
+                comparison[strategy] = {
+                    "num_chunks": len(self.pipeline.chunks),
+                    "avg_chunk_length": np.mean([c["length"] for c in self.pipeline.chunks])
+                    if self.pipeline.chunks else 0,
+                    "avg_latency_ms": eval_result["avg_latency_ms"],
+                    "avg_bm25_vector_overlap": eval_result["avg_bm25_vector_overlap"],
+                }
+        finally:
+            # Restore original state
+            self.pipeline.chunker = _orig_chunker
+            self.pipeline.vector_store = _orig_store
+            self.pipeline.retriever = _orig_retriever
+            self.pipeline.chunks = _orig_chunks
+            self.pipeline.strategy = _orig_strategy
 
         self.results["chunking_comparison"] = comparison
         return comparison
@@ -107,23 +123,24 @@ class Evaluator:
         texts = [c["content"] for c in chunks[:20]]  # Sample for speed
 
         from src.embedder import compare_embedding_models
-        comparison = compare_embedding_models(
-            texts, "What is logistic regression?"
-        )
+        query = config.eval_queries[0]  # Use config query, not hardcoded
+        comparison = compare_embedding_models(texts, query)
         self.results["embedding_comparison"] = comparison
         return comparison
 
     def evaluate_generation_quality(self, queries: Optional[List[str]] = None) -> Dict:
-        """Evaluate generation quality (uses ground truth from provided context)."""
+        """Evaluate end-to-end generation quality using the configured LLM."""
         if queries is None:
             queries = config.eval_queries[:3]
 
         gen_results = []
         for q in queries:
             try:
-                result = self.pipeline.query(q, use_llm=False)
+                result = self.pipeline.query(q, use_llm=True)
             except Exception as e:
-                result = {"answer": str(e), "retrieved_docs": []}
+                result = {"answer": f"[Error: {e}]", "retrieved_docs": [],
+                          "sources": [], "model": "error",
+                          "retrieval_time_ms": 0}
 
             gen_results.append({
                 "query": q,
@@ -191,8 +208,10 @@ class Evaluator:
         if "embedding_comparison" in self.results:
             print(f"\n--- Embedding Model Comparison ---")
             for model, data in self.results["embedding_comparison"].items():
+                disc = data.get("discrimination", "N/A")
                 print(f"  {model}: dim={data['dim']}, "
-                      f"avg_sim={data['avg_similarity']:.4f}")
+                      f"avg_sim={data['avg_similarity']:.4f}, "
+                      f"discrimination={disc}")
 
         if "generation" in self.results:
             g = self.results["generation"]
