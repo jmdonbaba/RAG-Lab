@@ -99,24 +99,18 @@ footer { display: none !important; }
     padding: 12px 16px;
     color: #991b1b;
 }
-/* 示例问题按钮 — 默认状态增加区分度 */
-.chat-interface .example-container button,
-.examples button,
+/* 示例问题按钮 — 默认状态增加区分度（Gradio ChatInterface 示例卡片） */
 button.example {
-    background: var(--color-primary-50) !important;
-    border: 1px solid var(--color-primary-200) !important;
-    color: var(--color-primary-700) !important;
-    border-radius: 99px !important;
-    padding: 6px 16px !important;
-    font-size: 13px !important;
-    transition: all 0.2s ease !important;
+    background-color: #eff6ff !important;
+    border: 1px solid #93c5fd !important;
 }
-.chat-interface .example-container button:hover,
-.examples button:hover,
 button.example:hover {
-    background: var(--color-primary-100) !important;
-    border-color: var(--color-primary-400) !important;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
+    background-color: #dbeafe !important;
+    border-color: #60a5fa !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+}
+button.example .example-text {
+    color: #1e40af !important;
 }
 """
 
