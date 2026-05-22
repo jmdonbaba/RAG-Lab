@@ -27,7 +27,7 @@ custom_theme = gr.themes.Soft(
     primary_hue="blue",
     secondary_hue="slate",
     neutral_hue="slate",
-    font=gr.themes.Font("Inter", "system-ui", "sans-serif"),
+    font=["Inter", "system-ui", "sans-serif"],
 ).set(
     body_background_fill="*neutral_50",
     block_background_fill="white",
