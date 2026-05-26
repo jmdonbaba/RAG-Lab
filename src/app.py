@@ -39,6 +39,8 @@ custom_theme = gr.themes.Soft(
     input_radius="8px",
     button_primary_background_fill="*primary_600",
     button_primary_background_fill_hover="*primary_700",
+    button_primary_border_color="transparent",
+    button_primary_border_color_hover="transparent",
     checkbox_background_color_selected="*primary_600",
     loader_color="*primary_600",
 )
@@ -99,15 +101,66 @@ footer { display: none !important; }
     padding: 12px 16px;
     color: #991b1b;
 }
+
+/* ── 按钮整体增强 ── */
+.gr-button,
+button {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+}
+.gr-button:hover,
+button:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+}
+.gr-button-primary,
+button.primary,
+button[variant="primary"] {
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2) !important;
+}
+.gr-button-primary:hover,
+button.primary:hover,
+button[variant="primary"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35) !important;
+}
+.gr-button-primary:active,
+button.primary:active,
+button[variant="primary"]:active {
+    transform: translateY(0) scale(0.97) !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2) !important;
+}
+.gr-button-secondary:hover,
+button.secondary:hover {
+    transform: translateY(-1px) !important;
+}
+.gr-button:focus-visible,
+button:focus-visible {
+    outline: 2px solid var(--color-primary-400) !important;
+    outline-offset: 2px !important;
+}
+.gr-button:disabled,
+button:disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+}
+
 /* 示例问题按钮 — 默认状态增加区分度（Gradio ChatInterface 示例卡片） */
 button.example {
     background-color: #eff6ff !important;
     border: 1px solid #93c5fd !important;
+    transition: all 0.2s ease !important;
 }
 button.example:hover {
     background-color: #dbeafe !important;
     border-color: #60a5fa !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+    transform: translateY(-2px) !important;
+}
+button.example:active {
+    transform: translateY(0) scale(0.98) !important;
 }
 button.example .example-text {
     color: #1e40af !important;
@@ -357,7 +410,7 @@ def build_ui():
                                 placeholder="输入查询内容，对比不同检索方法的效果...",
                                 scale=3,
                             )
-                            compare_btn = gr.Button("开始对比", variant="primary", scale=1)
+                            compare_btn = gr.Button("开始对比", variant="primary", size="lg", scale=1, elem_id="compare-btn")
                         compare_status = gr.Markdown("", elem_id="compare-loading")
 
                         with gr.Row(equal_height=True):
@@ -378,7 +431,7 @@ def build_ui():
                         运行覆盖分块策略、嵌入模型、检索性能、生成质量的完整评估。首次运行可能需要 1-2 分钟。
                         """)
 
-                        eval_btn = gr.Button("▶ 运行完整评估", variant="primary", size="lg")
+                        eval_btn = gr.Button("▶ 运行完整评估", variant="primary", size="lg", elem_id="eval-btn")
                         eval_status = gr.Markdown("")
 
                         with gr.Group(visible=False) as eval_results_group:
