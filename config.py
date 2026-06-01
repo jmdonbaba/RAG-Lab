@@ -95,7 +95,8 @@ class Config:
     #
     # top_k: 每次返回的文档块数量
     # retrieval_weights: BM25 和向量检索的权重
-    #   - bm25=0.2, vector=0.8: 偏语义（推荐）
+    #   - bm25=0.2, vector=0.8: 偏语义
+    #   - bm25=0.4, vector=0.6: 推荐（兼顾关键词与语义）
     #   - bm25=0.5, vector=0.5: 均衡
     #   - bm25=0.8, vector=0.2: 偏关键词
     #
@@ -104,7 +105,7 @@ class Config:
     #   - "weighted": 归一化后加权求和
     # ============================================================
     top_k: int = 5
-    retrieval_weights: dict = field(default_factory=lambda: {"bm25": 0.2, "vector": 0.8})
+    retrieval_weights: dict = field(default_factory=lambda: {"bm25": 0.4, "vector": 0.6})
     hybrid_fusion: str = "rrf"
     enable_query_translation: bool = True  # BM25 中→英翻译，解决跨语言检索
 

@@ -258,9 +258,9 @@ def compare_strategies(query: str):
                 score = f"{d['score']:.4f}" if isinstance(d["score"], float) else str(d["score"])
                 html += (
                     f'<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--color-neutral-100);">'
-                    f'<div style="font-size:13px;font-weight:600;">{i}. {d["source"]}</div>'
+                    f'<div style="font-size:13px;font-weight:600;word-break:break-all;overflow-wrap:break-word;">{i}. {d["source"]}</div>'
                     f'<div style="font-size:12px;color:var(--color-neutral-500);">相关度: {score}</div>'
-                    f'<div style="font-size:12px;color:var(--color-neutral-600);">{d.get("preview", "")}...</div>'
+                    f'<div style="font-size:12px;color:var(--color-neutral-600);word-break:break-all;overflow-wrap:break-word;">{d.get("preview", "")}...</div>'
                     f"</div>"
                 )
             html += "</div>"
