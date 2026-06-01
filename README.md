@@ -54,7 +54,7 @@ RAG-Lab/
 │   ├── evaluator.py              # 检索与生成质量评估
 │   └── app.py                    # Gradio 网页界面
 │
-├── tests/                        # pytest 自动化测试 (81 个用例, 77 通过)
+├── tests/                        # pytest 自动化测试 (81 个用例, 77 通过, 4 跳过)
 │   ├── conftest.py               # 共享 fixtures（测试数据、embedder、存储）
 │   ├── test_chunker.py           # 分块策略测试（17 个用例）
 │   ├── test_embedder.py          # 向量嵌入测试（6 个用例）
@@ -154,16 +154,18 @@ python main.py ui
 | 参数 | 命令 | 说明 |
 |------|------|------|
 | `--strategy` | `build` | 分块策略：`fixed_token` / `recursive_char` / `semantic` |
-| `--store` | `build` | 向量存储：`chroma`（持久化）/ `faiss`（纯内存） |
+| `--store` | `build`, `query`, `evaluate`, `compare` | 向量存储：`chroma`（持久化）/ `faiss`（纯内存） |
 | `--embedding` | `build` | 嵌入模型名称 |
 | `--top_k` | `query` | 返回的文档片段数量（默认 5） |
 | `--no_llm` | `query` | 仅检索模式，不调用 LLM 生成 |
+
+> **提示**：首次使用 `build` 会构建完整索引。后续执行 `query`/`compare`/`evaluate` 会自动复用已有索引，无需重建。
 
 ---
 
 ## 测试
 
-项目包含完整的 pytest 测试套件（81 个用例，77 通过，4 跳过），覆盖六大核心模块：文本分块、向量嵌入、混合检索、向量存储、系统评估和 LLM 生成。
+项目包含完整的 pytest 测试套件（81 个用例，77 通过，4 跳过，耗时约 40s），覆盖六大核心模块：文本分块、向量嵌入、混合检索、向量存储、系统评估和 LLM 生成。
 
 ```bash
 # 运行全部测试
@@ -288,11 +290,12 @@ python scripts/generate_figures.py
 ## 扩展方向
 
 - [x] ~~Query 翻译（跨语言 BM25 检索）~~
+- [x] ~~流式输出（Streaming）~~
+- [x] ~~API 重试与日志框架~~
 - [ ] Re-Ranker 重排序（如 BGE-Reranker）
 - [ ] 多轮对话记忆
 - [ ] HyDE 查询增强
 - [ ] LangChain / LlamaIndex 集成对比
-- [ ] 流式输出（Streaming）
 - [ ] 更多文档格式支持（Markdown、Word）
 
 ---

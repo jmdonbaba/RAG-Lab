@@ -55,29 +55,48 @@ class RAGPipeline:
         self.retriever = HybridRetriever(self.embedder, self.vector_store)
         self.generator = Generator()
 
-    def build_index(self, docs: Optional[List[Dict]] = None):
-        """Load docs, chunk, embed, and build the search index."""
+    def build_index(self, docs: Optional[List[Dict]] = None,
+                    force: bool = False):
+        """Load docs, chunk, embed, and build the search index.
+
+        If the vector store already has data and force=False, skip
+        embedding and reuse the existing index — only rebuild BM25.
+        """
         if docs is None:
             docs = self.loader.run()
 
         if not docs:
             raise ValueError("No documents available. Check data source.")
 
+        if not force and self.vector_store.count() > 0:
+            self.chunks = self.chunker.chunk_documents(docs)
+            self.retriever.build_bm25(self.chunks)
+            self._log("使用已有索引 (%d 个向量)，跳过嵌入步骤",
+                       self.vector_store.count())
+            return
+
         self.chunks = self.chunker.chunk_documents(docs)
         if not self.chunks:
             raise ValueError("No chunks produced.")
 
         texts = [c["content"] for c in self.chunks]
-        print(f"正在使用 {self.embedding_model} 嵌入 {len(texts)} 个文本块...")
+        self._log("正在使用 %s 嵌入 %d 个文本块...",
+                   self.embedding_model, len(texts))
         embeddings = self.embedder.embed(texts)
 
-        print(f"正在构建 {self.store_type} 索引，共 {len(embeddings)} 个向量...")
+        self._log("正在构建 %s 索引，共 %d 个向量...",
+                   self.store_type, len(embeddings))
         self.vector_store.add(self.chunks, embeddings)
 
         self.retriever.build_bm25(self.chunks)
 
-        print(f"索引构建完成: {self.vector_store.count()} 个向量, "
-              f"{len(self.chunks)} 个文本块 (来自 {len(docs)} 篇文档)")
+        self._log("索引构建完成: %d 个向量, %d 个文本块 (来自 %d 篇文档)",
+                   self.vector_store.count(), len(self.chunks), len(docs))
+
+    @staticmethod
+    def _log(fmt: str, *args):
+        from logging import getLogger
+        getLogger("rag_lab").info(fmt, *args)
 
     def query(self, question: str, top_k: int = 5,
               use_llm: bool = True) -> Dict:

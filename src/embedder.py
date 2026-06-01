@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from typing import List, Dict, Optional
 from config import config
@@ -14,13 +15,17 @@ class Embedder:
     def model(self):
         if self._model is None:
             from sentence_transformers import SentenceTransformer
-            print(f"Loading embedding model: {self.model_name}")
+            logging.getLogger("rag_lab").info(
+                "Loading embedding model: %s", self.model_name)
             self._model = SentenceTransformer(self.model_name)
         return self._model
 
     @property
     def dim(self) -> int:
-        return self.model.get_sentence_embedding_dimension()
+        try:
+            return self.model.get_embedding_dimension()
+        except AttributeError:
+            return self.model.get_sentence_embedding_dimension()
 
     def embed(self, texts: List[str], batch_size: int = 32,
               show_progress: bool = True) -> np.ndarray:
@@ -54,7 +59,8 @@ def compare_embedding_models(texts: List[str], query: str,
             _ = emb.embed(["test"], show_progress=False)
             available.append(mn)
         except Exception as e:
-            print(f"  Model {mn} not available: {e}")
+            logging.getLogger("rag_lab").warning(
+                "Model %s not available: %s", mn, e)
 
     for mn in available:
         emb = Embedder(mn)

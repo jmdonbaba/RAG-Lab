@@ -1,3 +1,4 @@
+import logging
 import pytest
 import numpy as np
 from unittest.mock import MagicMock
@@ -215,7 +216,23 @@ class TestRunFullEvaluation:
 
 
 class TestPrintReport:
-    def test_prints_all_sections(self, mock_pipeline, monkeypatch, capsys):
+    @pytest.fixture(autouse=True)
+    def _capture_logging(self):
+        """Redirect rag_lab logger to a StringIO for assertion."""
+        import io
+        stream = io.StringIO()
+        handler = logging.StreamHandler(stream)
+        handler.setLevel(logging.DEBUG)
+        logger = logging.getLogger("rag_lab")
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
+        logger.propagate = False
+        yield stream
+        logger.removeHandler(handler)
+        logger.propagate = True
+
+    def test_prints_all_sections(self, mock_pipeline, monkeypatch,
+                                  _capture_logging):
         mock_pipeline.loader = MagicMock()
         mock_pipeline.loader.load_processed.return_value = [
             {"source": "doc1.pdf", "content": "Some content"}
@@ -228,13 +245,14 @@ class TestPrintReport:
         evaluator = Evaluator(mock_pipeline)
         evaluator.print_report()
 
-        captured = capsys.readouterr().out
+        captured = _capture_logging.getvalue()
         assert "Retrieval Performance" in captured
         assert "Chunking Strategy Comparison" in captured
         assert "Embedding Model Comparison" in captured
         assert "Generation Quality" in captured
 
-    def test_runs_evaluation_if_not_yet_run(self, mock_pipeline, monkeypatch, capsys):
+    def test_runs_evaluation_if_not_yet_run(self, mock_pipeline, monkeypatch,
+                                             _capture_logging):
         mock_pipeline.loader = MagicMock()
         mock_pipeline.loader.load_processed.return_value = [
             {"source": "doc1.pdf", "content": "Some content"}

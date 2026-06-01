@@ -9,6 +9,7 @@ RAG-Lab 全局配置
 """
 
 import os
+import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 from dotenv import load_dotenv
@@ -19,6 +20,9 @@ load_dotenv()
 # 参考: https://hf-mirror.com
 if not os.environ.get("HF_ENDPOINT"):
     os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
+# 项目级 logger，所有模块通过 logging.getLogger("rag_lab") 引用
+logger = logging.getLogger("rag_lab")
 
 
 @dataclass

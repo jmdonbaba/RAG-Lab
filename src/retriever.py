@@ -1,3 +1,6 @@
+import logging
+import re
+import time
 import numpy as np
 from typing import List, Dict, Optional, Tuple
 from rank_bm25 import BM25Okapi
@@ -8,8 +11,14 @@ from src.embedder import Embedder
 from src.vector_store import VectorStore
 
 
+# CJK Unified Ideographs (U+4E00-U+9FFF), Extension A (U+3400-U+4DBF),
+# and Compatibility Ideographs (U+F900-U+FAFF)
+_CJK_RE = re.compile(r'[㐀-䶿一-鿿豈-﫿]')
+
+
 def _has_chinese(text: str) -> bool:
-    return any('一' <= c <= '鿿' for c in text)
+    """Check if text contains CJK characters."""
+    return bool(_CJK_RE.search(text))
 
 
 def _tokenize(text: str) -> List[str]:
@@ -23,33 +32,48 @@ def _tokenize(text: str) -> List[str]:
 _translation_cache: Dict[str, str] = {}
 
 
-def _translate_query(chinese_query: str) -> str:
+def _translate_query(chinese_query: str, max_retries: int = 2) -> str:
     """将中文查询翻译为英文，用于 BM25 跨语言检索。结果会被缓存。"""
     if chinese_query in _translation_cache:
         return _translation_cache[chinese_query]
 
-    from openai import OpenAI
+    from openai import OpenAI, RateLimitError, APIConnectionError
 
     client = OpenAI(
         api_key=config.deepseek_api_key,
         base_url=config.deepseek_base_url,
     )
-    response = client.chat.completions.create(
-        model=config.deepseek_model,
-        messages=[{
-            "role": "user",
-            "content": (
-                "Translate the following Chinese question into English for academic "
-                "document search. Return ONLY the English translation, no explanation.\n\n"
-                f"Chinese: {chinese_query}\nEnglish:"
-            ),
-        }],
-        temperature=0.0,
-        max_tokens=128,
-    )
-    translated = response.choices[0].message.content.strip()
-    _translation_cache[chinese_query] = translated
-    return translated
+
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model=config.deepseek_model,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        "Translate the following Chinese question into English for "
+                        "academic document search. Return ONLY the English "
+                        "translation, no explanation.\n\n"
+                        f"Chinese: {chinese_query}\nEnglish:"
+                    ),
+                }],
+                temperature=0.0,
+                max_tokens=128,
+            )
+            translated = response.choices[0].message.content.strip()
+            _translation_cache[chinese_query] = translated
+            return translated
+        except (RateLimitError, APIConnectionError) as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+        except Exception:
+            break
+
+    logging.getLogger("rag_lab").warning(
+        "Query translation failed, using original: %s", last_error)
+    raise RuntimeError(f"Translation failed: {last_error}") from last_error
 
 
 class HybridRetriever:
@@ -101,8 +125,9 @@ class HybridRetriever:
             try:
                 search_query = _translate_query(query)
                 self._translated_query = search_query
-            except Exception:
-                pass  # 翻译失败就降级用原文
+            except Exception as e:
+                logging.getLogger("rag_lab").warning(
+                    "Query translation unavailable, using Chinese for BM25: %s", e)
 
         tokens = _tokenize(search_query)
         scores = self._bm25_index.get_scores(tokens)
@@ -144,19 +169,33 @@ class HybridRetriever:
         scores: Dict[str, dict] = {}
         for rank, r in enumerate(bm25_results):
             rid = r["id"]
+            rrf = self.bm25_weight / (k + rank + 1)
             if rid not in scores:
-                scores[rid] = r.copy()
-                scores[rid]["rrf_score"] = self.bm25_weight / (k + rank + 1)
+                scores[rid] = {
+                    "id": rid,
+                    "content": r["content"],
+                    "metadata": r["metadata"],
+                    "score": r["score"],
+                    "source": "fused",
+                    "rrf_score": rrf,
+                }
             else:
-                scores[rid]["rrf_score"] += self.bm25_weight / (k + rank + 1)
+                scores[rid]["rrf_score"] += rrf
 
         for rank, r in enumerate(vector_results):
             rid = r["id"]
+            rrf = self.vector_weight / (k + rank + 1)
             if rid not in scores:
-                scores[rid] = r.copy()
-                scores[rid]["rrf_score"] = self.vector_weight / (k + rank + 1)
+                scores[rid] = {
+                    "id": rid,
+                    "content": r["content"],
+                    "metadata": r["metadata"],
+                    "score": r["score"],
+                    "source": "fused",
+                    "rrf_score": rrf,
+                }
             else:
-                scores[rid]["rrf_score"] += self.vector_weight / (k + rank + 1)
+                scores[rid]["rrf_score"] += rrf
 
         merged = list(scores.values())
         merged.sort(key=lambda x: x.get("rrf_score", 0), reverse=True)

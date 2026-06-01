@@ -1,4 +1,5 @@
 import re
+import logging
 import tiktoken
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
@@ -177,8 +178,11 @@ class Chunker:
                     "strategy": self.strategy_name,
                 })
 
-        print(f"Chunked {len(docs)} documents into {len(chunks)} chunks "
-              f"(strategy={self.strategy_name}, size={self.chunk_size}, overlap={self.chunk_overlap})")
+        logging.getLogger("rag_lab").info(
+            "Chunked %d documents into %d chunks "
+            "(strategy=%s, size=%d, overlap=%d)",
+            len(docs), len(chunks),
+            self.strategy_name, self.chunk_size, self.chunk_overlap)
         return chunks
 
     def compare_strategies(self, docs: List[Dict]) -> Dict[str, dict]:

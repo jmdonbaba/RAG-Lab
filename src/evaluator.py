@@ -1,4 +1,5 @@
 import time
+import logging
 import numpy as np
 from typing import List, Dict, Optional
 from collections import defaultdict
@@ -45,7 +46,6 @@ class Evaluator:
 
             # Per-result scores: prefer rrf_score in RRF mode, fall back to score
             rrf_scores = [r.get("rrf_score", r.get("score", 0)) for r in hybrid]
-            raw_scores = [r.get("score", 0) for r in hybrid]
             if rrf_scores:
                 score_variance.append(float(np.var(rrf_scores)))
 
@@ -92,7 +92,8 @@ class Evaluator:
 
         try:
             for strategy in ["fixed_token", "recursive_char", "semantic"]:
-                print(f"\n  Evaluating strategy: {strategy}")
+                logging.getLogger("rag_lab").info(
+                    "  Evaluating strategy: %s", strategy)
                 self.pipeline.rebuild_with_strategy(strategy, docs)
                 eval_result = self.evaluate_retrieval(queries)
                 comparison[strategy] = {
@@ -160,24 +161,28 @@ class Evaluator:
 
     def run_full_evaluation(self) -> Dict:
         """Run all evaluations and return comprehensive results."""
-        print("=" * 60)
-        print("RAG SYSTEM EVALUATION")
-        print("=" * 60)
+        _log = logging.getLogger("rag_lab")
+        _log.info("=" * 60)
+        _log.info("RAG SYSTEM EVALUATION")
+        _log.info("=" * 60)
 
-        print("\n[1/4] Evaluating retrieval quality...")
+        _log.info("[1/4] Evaluating retrieval quality...")
         self.evaluate_retrieval()
-        print(f"  Avg latency: {self.results['retrieval']['avg_latency_ms']}ms")
-        print(f"  Avg BM25-Vector overlap: {self.results['retrieval']['avg_bm25_vector_overlap']}")
+        _log.info("  Avg latency: %sms",
+                   self.results['retrieval']['avg_latency_ms'])
+        _log.info("  Avg BM25-Vector overlap: %s",
+                   self.results['retrieval']['avg_bm25_vector_overlap'])
 
-        print("\n[2/4] Comparing chunking strategies...")
+        _log.info("[2/4] Comparing chunking strategies...")
         self.evaluate_chunking_strategies()
         for s, r in self.results["chunking_comparison"].items():
-            print(f"  {s}: {r['num_chunks']} chunks, latency={r['avg_latency_ms']}ms")
+            _log.info("  %s: %s chunks, latency=%sms",
+                       s, r['num_chunks'], r['avg_latency_ms'])
 
-        print("\n[3/4] Comparing embedding models...")
+        _log.info("[3/4] Comparing embedding models...")
         self.evaluate_embedding_models()
 
-        print("\n[4/4] Evaluating generation quality...")
+        _log.info("[4/4] Evaluating generation quality...")
         self.evaluate_generation_quality()
 
         return self.results
@@ -187,34 +192,35 @@ class Evaluator:
         if not self.results:
             self.run_full_evaluation()
 
-        print("\n" + "=" * 60)
-        print("EVALUATION REPORT")
-        print("=" * 60)
+        _log = logging.getLogger("rag_lab")
+        _log.info("=" * 60)
+        _log.info("EVALUATION REPORT")
+        _log.info("=" * 60)
 
         if "retrieval" in self.results:
             r = self.results["retrieval"]
-            print(f"\n--- Retrieval Performance ---")
-            print(f"  Queries evaluated: {r['num_queries']}")
-            print(f"  Avg latency: {r['avg_latency_ms']}ms")
-            print(f"  Avg BM25-Vector overlap: {r['avg_bm25_vector_overlap']}")
+            _log.info("--- Retrieval Performance ---")
+            _log.info("  Queries evaluated: %s", r['num_queries'])
+            _log.info("  Avg latency: %sms", r['avg_latency_ms'])
+            _log.info("  Avg BM25-Vector overlap: %s",
+                       r['avg_bm25_vector_overlap'])
 
         if "chunking_comparison" in self.results:
-            print(f"\n--- Chunking Strategy Comparison ---")
+            _log.info("--- Chunking Strategy Comparison ---")
             for name, data in self.results["chunking_comparison"].items():
-                print(f"  {name:20s}: chunks={data['num_chunks']:4d}, "
-                      f"avg_len={data['avg_chunk_length']:.0f}, "
-                      f"latency={data['avg_latency_ms']}ms")
+                _log.info("  %-20s: chunks=%4d, avg_len=%.0f, latency=%sms",
+                           name, data['num_chunks'],
+                           data['avg_chunk_length'], data['avg_latency_ms'])
 
         if "embedding_comparison" in self.results:
-            print(f"\n--- Embedding Model Comparison ---")
+            _log.info("--- Embedding Model Comparison ---")
             for model, data in self.results["embedding_comparison"].items():
                 disc = data.get("discrimination", "N/A")
-                print(f"  {model}: dim={data['dim']}, "
-                      f"avg_sim={data['avg_similarity']:.4f}, "
-                      f"discrimination={disc}")
+                _log.info("  %s: dim=%s, avg_sim=%.4f, discrimination=%s",
+                           model, data['dim'], data['avg_similarity'], disc)
 
         if "generation" in self.results:
             g = self.results["generation"]
-            print(f"\n--- Generation Quality ---")
-            print(f"  Avg answer length: {g['avg_answer_length']:.0f} chars")
-            print(f"  Avg sources per query: {g['avg_sources_used']:.1f}")
+            _log.info("--- Generation Quality ---")
+            _log.info("  Avg answer length: %.0f chars", g['avg_answer_length'])
+            _log.info("  Avg sources per query: %.1f", g['avg_sources_used'])

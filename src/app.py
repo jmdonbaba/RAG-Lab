@@ -189,17 +189,35 @@ def format_sources_html(docs, retrieval_time_ms):
 
 
 def chat(message: str, history: list):
-    """Handle chat — returns generator of (answer, sources_html)."""
+    """Handle chat — streams LLM response with progressive rendering."""
     if not message.strip():
         yield "", ""
         return
 
     try:
         pipeline = get_pipeline()
-        result = pipeline.query(message, top_k=config.top_k, use_llm=True)
-        answer = result["answer"]
-        sources_html = format_sources_html(result["retrieved_docs"], result.get("retrieval_time_ms", 0))
-        yield answer, sources_html
+        t0 = __import__("time").time()
+
+        # Step 1: retrieve
+        retrieved = pipeline.retriever.retrieve(message)
+        retrieval_time = (__import__("time").time() - t0) * 1000
+
+        # Step 2: stream generation
+        accumulated = ""
+        for chunk in pipeline.generator.generate_stream(message, retrieved):
+            accumulated += chunk
+            yield accumulated, ""
+
+        # Step 3: final yield with sources
+        retrieved_docs = [{
+            "id": d["id"],
+            "source": d["metadata"]["source"],
+            "score": round(d.get("score", 0), 4),
+            "content_preview": d["content"][:150],
+        } for d in retrieved]
+        sources_html = format_sources_html(retrieved_docs, round(retrieval_time))
+        yield accumulated, sources_html
+
     except Exception as e:
         error_html = f'<div class="error-box">❌ 生成回答失败: {e}</div>'
         yield f"抱歉，生成回答时出现错误。请稍后重试。", error_html
@@ -507,10 +525,12 @@ def build_ui():
 
 
 def main():
-    print("正在初始化 RAG 流水线...")
+    import logging
+    _log = logging.getLogger("rag_lab")
+    _log.info("正在初始化 RAG 流水线...")
     get_pipeline()
 
-    print("正在启动 Gradio 网页界面...")
+    _log.info("正在启动 Gradio 网页界面...")
     demo = build_ui()
     demo.launch(
         server_name="0.0.0.0",

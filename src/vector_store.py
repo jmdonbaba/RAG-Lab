@@ -89,11 +89,13 @@ class VectorStore:
         )
         out = []
         for i in range(len(results["ids"][0])):
+            # ChromaDB with hnsw:space:cosine returns distance = 1 - cos_sim,
+            # so cos_sim = 1 - distance.
             out.append({
                 "id": results["ids"][0][i],
                 "content": results["documents"][0][i],
                 "metadata": results["metadatas"][0][i],
-                "score": 1.0 - results["distances"][0][i] / 2,  # Cosine distance to similarity
+                "score": 1.0 - results["distances"][0][i],
             })
         return out
 

@@ -15,7 +15,14 @@ RAG-Lab 命令行入口
 """
 
 import argparse
+import logging
 from config import config
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 
 def main():
@@ -57,13 +64,19 @@ def main():
     query_parser.add_argument("--top_k", type=int, default=5, help="返回文档数 (默认5)")
     query_parser.add_argument("--no_llm", action="store_true",
                               help="仅检索不生成（调试用）")
+    query_parser.add_argument("--store", default="chroma", choices=["chroma", "faiss"],
+                              help="使用的向量存储 (需与 build 一致)")
 
     # ---- evaluate: 运行评估 ----
     eval_parser = subparsers.add_parser("evaluate", help="运行完整系统评估")
+    eval_parser.add_argument("--store", default="chroma", choices=["chroma", "faiss"],
+                             help="使用的向量存储 (需与 build 一致)")
 
     # ---- compare: 对比检索方法 ----
     compare_parser = subparsers.add_parser("compare", help="对比 BM25 / 向量 / 混合检索效果")
     compare_parser.add_argument("question", help="要提问的问题")
+    compare_parser.add_argument("--store", default="chroma", choices=["chroma", "faiss"],
+                                help="使用的向量存储 (需与 build 一致)")
 
     # ---- ui: Web 界面 ----
     ui_parser = subparsers.add_parser("ui", help="启动 Gradio 网页交互界面")
@@ -78,13 +91,13 @@ def main():
             store_type=args.store,
             embedding_model=args.embedding,
         )
-        pipeline.build_index()
+        pipeline.build_index(force=True)
         print(f"\n索引构建成功！策略={args.strategy}, 存储={args.store}")
 
     elif args.command == "query":
         from src.pipeline import RAGPipeline
-        pipeline = RAGPipeline()
-        pipeline.build_index()
+        pipeline = RAGPipeline(store_type=getattr(args, 'store', 'chroma'))
+        pipeline.build_index(force=False)
         result = pipeline.query(args.question, top_k=args.top_k, use_llm=not args.no_llm)
 
         print(f"\n{'='*60}")
@@ -99,16 +112,16 @@ def main():
     elif args.command == "evaluate":
         from src.pipeline import RAGPipeline
         from src.evaluator import Evaluator
-        pipeline = RAGPipeline()
-        pipeline.build_index()
+        pipeline = RAGPipeline(store_type=getattr(args, 'store', 'chroma'))
+        pipeline.build_index(force=False)
         evaluator = Evaluator(pipeline)
         evaluator.run_full_evaluation()
         evaluator.print_report()
 
     elif args.command == "compare":
         from src.pipeline import RAGPipeline
-        pipeline = RAGPipeline()
-        pipeline.build_index()
+        pipeline = RAGPipeline(store_type=getattr(args, 'store', 'chroma'))
+        pipeline.build_index(force=False)
         results = pipeline.compare_retrieval_methods(args.question)
         method_names = {"hybrid": "混合检索", "bm25": "BM25关键词检索", "vector": "向量语义检索"}
         for method in ["hybrid", "bm25", "vector"]:

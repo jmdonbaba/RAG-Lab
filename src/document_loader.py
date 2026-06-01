@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import logging
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict
@@ -17,7 +18,7 @@ class DocumentLoader:
 
     def scrape_cmu_lectures(self) -> List[Dict]:
         """Scrape CMU 10-701 ML course lecture pages."""
-        print(f"Scraping {config.cmu_lectures_url} ...")
+        logging.getLogger("rag_lab").info(f"Scraping {config.cmu_lectures_url} ...")
         resp = requests.get(config.cmu_lectures_url, timeout=30)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.content, "html.parser")
@@ -35,7 +36,7 @@ class DocumentLoader:
                 seen.add(full_url)
                 lectures.append({"title": title, "url": full_url})
 
-        print(f"Found {len(lectures)} lecture files")
+        logging.getLogger("rag_lab").info(f"Found {len(lectures)} lecture files")
         return lectures
 
     def download_lectures(self, lectures: List[Dict]) -> List[str]:
@@ -56,9 +57,9 @@ class DocumentLoader:
                 with open(fpath, "wb") as f:
                     f.write(resp.content)
                 saved.append(fpath)
-                print(f"  Downloaded: {fname}{ext}")
+                logging.getLogger("rag_lab").info(f"  Downloaded: {fname}{ext}")
             except Exception as e:
-                print(f"  Failed {lec['url']}: {e}")
+                logging.getLogger("rag_lab").info(f"  Failed {lec['url']}: {e}")
 
         return saved
 
@@ -86,7 +87,7 @@ class DocumentLoader:
                     texts.append(t)
             return self._clean_text("\n".join(texts))
         except ImportError:
-            print("pypdf not installed, trying pdfplumber...")
+            logging.getLogger("rag_lab").info("pypdf not installed, trying pdfplumber...")
             try:
                 import pdfplumber
                 with pdfplumber.open(filepath) as pdf:
@@ -114,9 +115,9 @@ class DocumentLoader:
                     "content": text,
                     "length": len(text),
                 })
-                print(f"  Parsed: {os.path.basename(fpath)} ({len(text)} chars)")
+                logging.getLogger("rag_lab").info(f"  Parsed: {os.path.basename(fpath)} ({len(text)} chars)")
             except Exception as e:
-                print(f"  Parse failed {fpath}: {e}")
+                logging.getLogger("rag_lab").info(f"  Parse failed {fpath}: {e}")
 
         return docs
 
@@ -133,7 +134,7 @@ class DocumentLoader:
         outpath = os.path.join(self.processed_dir, "parsed_docs.json")
         with open(outpath, "w", encoding="utf-8") as f:
             json.dump(output, f, ensure_ascii=False, indent=2)
-        print(f"Saved {len(output)} documents to {outpath}")
+        logging.getLogger("rag_lab").info(f"Saved {len(output)} documents to {outpath}")
         return outpath
 
     def load_processed(self) -> List[Dict]:
@@ -148,17 +149,17 @@ class DocumentLoader:
         """Full pipeline: scrape -> download -> parse -> save."""
         cached = self.load_processed()
         if cached:
-            print(f"Loaded {len(cached)} cached documents")
+            logging.getLogger("rag_lab").info(f"Loaded {len(cached)} cached documents")
             return cached
 
         lectures = self.scrape_cmu_lectures()
         if not lectures:
-            print("No lectures found, creating sample data...")
+            logging.getLogger("rag_lab").info("No lectures found, creating sample data...")
             return self._create_sample_docs()
 
         saved = self.download_lectures(lectures)
         if not saved:
-            print("No files downloaded, creating sample data...")
+            logging.getLogger("rag_lab").info("No files downloaded, creating sample data...")
             return self._create_sample_docs()
 
         docs = self.parse_documents(saved)
@@ -336,7 +337,6 @@ class DocumentLoader:
         for s in samples:
             docs.append({
                 "source": s["title"].replace(" ", "_") + ".txt",
-                "filepath": os.path.join(self.raw_dir, s["title"].replace(" ", "_") + ".txt"),
                 "content": s["content"],
                 "length": len(s["content"]),
             })
